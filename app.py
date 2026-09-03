@@ -13,11 +13,12 @@ st.set_page_config(
 
 DATA_FILE = "baseball_members.json"
 
-# 공식 8개 수비 포지션 (투수 제외)
-POSITIONS = ["포수", "1루수", "2루수", "3루수", "유격수", "좌익수", "중견수", "우익수"]
+# 공식 8개 수비 포지션 + 투수
+POSITIONS = ["포수", "1루수", "2루수", "3루수", "유격수", "좌익수", "중견수", "우익수", "투수"]
 POS_CODE = {
     "포수": "C", "1루수": "1B", "2루수": "2B", "3루수": "3B",
-    "유격수": "SS", "좌익수": "LF", "중견수": "CF", "우익수": "RF"
+    "유격수": "SS", "좌익수": "LF", "중견수": "CF", "우익수": "RF",
+    "투수": "P"
 }
 CODE_TO_POS = {v: k for k, v in POS_CODE.items()}
 
@@ -73,13 +74,15 @@ if "bench" not in st.session_state:
 if "reasons" not in st.session_state:
     st.session_state.reasons = []
 
-# 최적 라인업 산출 알고리즘
+# 최적 라인업 산출 알고리즘 (자동 배정은 8개 수비 포지션만 대상)
 def compute_lineup(attendees):
     if not attendees:
         return {}, [], []
 
     assigned = {}
     used_names = set()
+    # 자동 배정 대상: 투수 제외 8개 포지션
+    auto_positions = [p for p in POSITIONS if p != "투수"]
 
     def get_score(member, pos):
         if member["pos1"] == pos:
@@ -89,7 +92,7 @@ def compute_lineup(attendees):
         return 5
 
     pos_demand = []
-    for pos in POSITIONS:
+    for pos in auto_positions:
         p1 = [m["name"] for m in attendees if m["pos1"] == pos]
         p2 = [m["name"] for m in attendees if m["pos2"] == pos]
         pos_demand.append({
@@ -158,7 +161,6 @@ tab_lineup, tab_members, tab_stats, tab_backup = st.tabs([
 # ─── 참석자 선택 스타일 (남색 테마) ───
 st.markdown("""
 <style>
-/* 멀티셀렉트 위젯 - 남색 계열 */
 .stMultiSelect [data-baseweb="multiselect"] .css-191i9si {
     border-color: #1e3a5f !important;
     background-color: #eef2ff !important;
@@ -190,10 +192,6 @@ st.markdown("""
 .stSelectbox [data-baseweb="select"] .css-191i9si:focus-within {
     border-color: #3b82f6 !important;
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25) !important;
-}
-/* 버튼 호버/활성 색조 통일 */
-.stButton > button[data-baseweb="button"] {
-    border-color: #1e3a5f !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -243,7 +241,7 @@ with tab_lineup:
 
         col_field, col_summary = st.columns([3, 2])
 
-        # ─── 야구장 그라운드 (잔디 초록) ───
+        # ─── 야구장 그라운드 (잔디 초록 + 마운드) ───
         with col_field:
             st.write("⚾ 야구장 수비 위치 배치도")
 
@@ -251,7 +249,8 @@ with tab_lineup:
                 "포수": (50, 88), "1루수": (76, 56),
                 "2루수": (63, 41), "3루수": (24, 56),
                 "유격수": (37, 41),
-                "좌익수": (18, 20), "중견수": (50, 12), "우익수": (82, 20)
+                "좌익수": (18, 20), "중견수": (50, 12), "우익수": (82, 20),
+                "투수": (50, 52)   # 마운드 위치 - 야구장 중앙 약간 위쪽
             }
 
             pins_html = ""
@@ -261,16 +260,21 @@ with tab_lineup:
                     p_name = player["name"]
                     p1 = player["pos1"]
                     p2 = player["pos2"]
-                    if p1 == pos:
-                        bg = "#1e3a5f"       # 남색 - 1지망
+                    # 투수 전용 스타일
+                    if pos == "투수":
+                        bg = "#1e293b"        # 남색
+                        border = "#64748b"
+                        label_color = "#94a3b8"
+                    elif p1 == pos:
+                        bg = "#1e3a5f"        # 남색 - 1지망
                         border = "#3b82f6"
                         label_color = "#93c5fd"
                     elif p2 == pos:
-                        bg = "#172554"       # 진한 남색 - 2지망
+                        bg = "#172554"        # 진한 남색 - 2지망
                         border = "#6366f1"
                         label_color = "#a5b4fc"
                     else:
-                        bg = "#0f172a"       # 남색 배경 - 조정 배정
+                        bg = "#0f172a"        # 남색 배경 - 조정 배정
                         border = "#818cf8"
                         label_color = "#c4b5fd"
                 else:
@@ -294,11 +298,16 @@ with tab_lineup:
                 <div style="position:absolute;inset:0;opacity:0.25;pointer-events:none;
                     background:radial-gradient(ellipse at 50% 50%, #128040 0%, #0f6b3a 60%, #0a4d2a 100%);">
                 </div>
-                <!-- 다이아몬드 흙색 경기 구역 -->
+                <!-- 베이스 라인 (다이아몬드 흙색 구역) -->
                 <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
                     <div style="width:45%;aspect-ratio:1/1;background:#a9714d;transform:rotate(45deg);margin-top:55px;
                         border:1px solid #8b5a2b;border-radius:4px;opacity:0.85;">
                     </div>
+                </div>
+                <!-- 마운드 흙색 원 -->
+                <div style="position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);
+                    width:8%;aspect-ratio:1/1;background:#a9714d;border-radius:50%;
+                    border:1px solid #8b5a2b;box-shadow:0 2px 6px rgba(0,0,0,0.3);pointer-events:none;">
                 </div>
                 {pins_html}
                 <script>
@@ -352,8 +361,15 @@ with tab_lineup:
                 assigned_name = assigned_player["name"] if assigned_player else "공석"
                 
                 r_item = next((r for r in st.session_state.reasons if r["pos"] == pos), None)
-                p1_names = ", ".join(r_item["p1_list"]) if r_item and r_item["p1_list"] else "없음"
-                p2_names = ", ".join(r_item["p2_list"]) if r_item and r_item["p2_list"] else "없음"
+                if r_item:
+                    p1_names = ", ".join(r_item["p1_list"]) if r_item["p1_list"] else "없음"
+                    p2_names = ", ".join(r_item["p2_list"]) if r_item["p2_list"] else "없음"
+                else:
+                    # 투수는 자동 배정 대상이 아니니까 지원 명단 직접 계산
+                    p1_list = [m["name"] for m in st.session_state.members if m["pos1"] == pos]
+                    p2_list = [m["name"] for m in st.session_state.members if m["pos2"] == pos]
+                    p1_names = ", ".join(p1_list) if p1_list else "없음"
+                    p2_names = ", ".join(p2_list) if p2_list else "없음"
 
                 with st.container(border=True):
                     st.markdown(f"**{pos}** → **{assigned_name}**")
