@@ -155,6 +155,49 @@ tab_lineup, tab_members, tab_stats, tab_backup = st.tabs([
     "💾 백업 및 파일 관리"
 ])
 
+# ─── 참석자 선택 스타일 (남색 테마) ───
+st.markdown("""
+<style>
+/* 멀티셀렉트 위젯 - 남색 계열 */
+.stMultiSelect [data-baseweb="multiselect"] .css-191i9si {
+    border-color: #1e3a5f !important;
+    background-color: #eef2ff !important;
+}
+.stMultiSelect [data-baseweb="multiselect"] .css-191i9si:hover {
+    border-color: #3b82f6 !important;
+    background-color: #e0e7ff !important;
+}
+.stMultiSelect [data-baseweb="multiselect"] .css-191i9si:focus-within {
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25) !important;
+}
+.stMultiSelect [data-baseweb="multiselect"] .css-1p8n2gn {
+    background-color: #1e3a5f !important;
+}
+.stMultiSelect [data-baseweb="multiselect"] .css-1p8n2gn:hover {
+    background-color: #3b82f6 !important;
+}
+.stMultiSelect [data-baseweb="multiselect"] .css-1u27aoq {
+    background-color: #0f172a !important;
+    border-radius: 0 6px 6px 0 !important;
+}
+.stMultiSelect [data-baseweb="multiselect"] .css-1u27aoq:hover {
+    background-color: #1e3a5f !important;
+}
+.stSelectbox [data-baseweb="select"] .css-191i9si {
+    border-color: #1e3a5f !important;
+}
+.stSelectbox [data-baseweb="select"] .css-191i9si:focus-within {
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25) !important;
+}
+/* 버튼 호버/활성 색조 통일 */
+.stButton > button[data-baseweb="button"] {
+    border-color: #1e3a5f !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 with tab_lineup:
     st.subheader("오늘 경기 참석자 선택")
     member_names = [m["name"] for m in st.session_state.members]
@@ -200,7 +243,7 @@ with tab_lineup:
 
         col_field, col_summary = st.columns([3, 2])
 
-        # 야구장 다이아몬드 시각화 (HTML/SVG)
+        # ─── 야구장 그라운드 (잔디 초록) ───
         with col_field:
             st.write("⚾ 야구장 수비 위치 배치도")
 
@@ -219,32 +262,43 @@ with tab_lineup:
                     p1 = player["pos1"]
                     p2 = player["pos2"]
                     if p1 == pos:
-                        bg = "#0f3b5e"
+                        bg = "#1e3a5f"       # 남색 - 1지망
                         border = "#3b82f6"
+                        label_color = "#93c5fd"
                     elif p2 == pos:
-                        bg = "#1e3a5f"
-                        border = "#60a5fa"
+                        bg = "#172554"       # 진한 남색 - 2지망
+                        border = "#6366f1"
+                        label_color = "#a5b4fc"
                     else:
-                        bg = "#1e1b4b"
-                        border = "#a78bfa"
+                        bg = "#0f172a"       # 남색 배경 - 조정 배정
+                        border = "#818cf8"
+                        label_color = "#c4b5fd"
                 else:
                     p_name = "공석"
                     bg = "#1e293b"
                     border = "#475569"
+                    label_color = "#94a3b8"
 
                 pins_html += f"""
                 <div style="position:absolute;left:{x}%;top:{y}%;transform:translate(-50%,-50%);z-index:10;" class="pin_box" data-pos="{pos}">
                     <div style="background:{bg};border:1.5px solid {border};border-radius:8px;padding:2px 6px;text-align:center;color:white;font-size:9px;box-shadow:0 2px 4px -1px rgba(0,0,0,0.4);min-width:50px;line-height:1.3;cursor:pointer;">
-                        <div style="font-weight:bold;color:#93c5fd;font-size:8px;">{pos}</div>
+                        <div style="font-weight:bold;color:{label_color};font-size:8px;">{pos}</div>
                         <div style="font-weight:800;font-size:10px;margin-top:1px;">{p_name}</div>
                     </div>
                 </div>
                 """
 
             field_html = f"""
-            <div style="position:relative;width:100%;aspect-ratio:4/3;background:#0f172a;border-radius:16px;border:2px solid #1e3a5f;overflow:hidden;box-shadow:inset 0 2px 8px rgba(0,0,0,0.8);">
-                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0.25;pointer-events:none;">
-                    <div style="width:45%;aspect-ratio:1/1;border:2px solid #bfdbfe;transform:rotate(45deg);margin-top:55px;"></div>
+            <div style="position:relative;width:100%;aspect-ratio:4/3;background:#0f6b3a;border-radius:16px;border:2px solid #0a4d2a;overflow:hidden;box-shadow:inset 0 2px 10px rgba(0,0,0,0.35);">
+                <!-- 잔디 질감 그라데이션 -->
+                <div style="position:absolute;inset:0;opacity:0.25;pointer-events:none;
+                    background:radial-gradient(ellipse at 50% 50%, #128040 0%, #0f6b3a 60%, #0a4d2a 100%);">
+                </div>
+                <!-- 다이아몬드 흙색 경기 구역 -->
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
+                    <div style="width:45%;aspect-ratio:1/1;background:#a9714d;transform:rotate(45deg);margin-top:55px;
+                        border:1px solid #8b5a2b;border-radius:4px;opacity:0.85;">
+                    </div>
                 </div>
                 {pins_html}
                 <script>
@@ -277,7 +331,6 @@ with tab_lineup:
 
             st.write(f"🪑 대기 후보 (벤치 {len(st.session_state.bench)}명)")
             if st.session_state.bench:
-                # 각 선수별 박스 GUI 대신 줄바꿈 + 1지망만 표시
                 bench_items = []
                 for m in st.session_state.bench:
                     p1 = m["pos1"]
