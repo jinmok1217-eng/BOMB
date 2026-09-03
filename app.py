@@ -262,36 +262,29 @@ with tab_lineup:
         with st.expander("🔧 수동 라인업 구성 패널", expanded=True):
             st.write("참석자 목록에서 각 포지션의 선수를 선택하세요. 공석을 원하면 '--- 공석 ---'을 선택하세요.")
             
-            # 포지션별 선택 드롭다운 (1지망 / 2지망 / 미지망 옵션 정렬)
             manual_selections = {}
             manual_cols = st.columns(3)
             for idx, pos in enumerate(POSITIONS):
                 col = manual_cols[idx % 3]
                 with col:
-                    # 해당 포지션에 1지망 또는 2지망으로 지원한 참석자 추출 (중복 제거)
                     p1_names = [m["name"] for m in att_objs if m["pos1"] == pos]
                     p2_names = [m["name"] for m in att_objs if m["pos2"] == pos]
                     
-                    # 정렬: 1지망 먼저, 2지망 다음, 미지망(스스로 1/2지망 안한 참석자) 마지막
                     p1_set = set(p1_names)
                     p2_set = set(p2_names)
                     p1_only = [n for n in p1_names if n not in p2_set]
                     p2_only = [n for n in p2_names if n not in p1_set]
                     both = [n for n in p1_names if n in p2_set]
-                    # 이미 1지망/2지망 리스트에 포함된 이름들
                     named_set = p1_set | p2_set
-                    # 미지망: 참석자인데 이 포지션에 1지망도 2지망도 아닌 사람
                     not_supporting = [m["name"] for m in att_objs if m["name"] not in named_set]
                     
-                    # 옵션 구성: 공석(최상단) + 1지망 + 2지망 + 미지망 순서
                     options = []
                     options.append("--- 공석 ---")
                     options.extend([(n, "1지망") for n in p1_only])
-                    options.extend([(n, "1지망") for n in both])  # both는 일단 1지망으로 표시
+                    options.extend([(n, "1지망") for n in both])
                     options.extend([(n, "2지망") for n in p2_only])
                     options.extend([(n, "미지망") for n in not_supporting])
                     
-                    # 표시 문자열 만들기
                     option_labels = []
                     for opt in options:
                         if isinstance(opt, tuple):
@@ -299,18 +292,17 @@ with tab_lineup:
                         else:
                             option_labels.append(opt)
                     
-                    # 현재 선택된 값 가져오기
-                    current_val = st.session_state.lineup.get(pos, {}).get("name", "") if st.session_state.lineup else ""
-                    if current_val == "" or not any(current_val in lbl for lbl in option_labels):
-                        current_val_idx = 0  # 공석
-                    else:
-                        # 현재 선택된 이름이 option_labels 중 어디에 있는지 찾기
+                    # 현재 라인업 상태에서 선택된 이름 가져오기
+                    current_name = ""
+                    if st.session_state.lineup and pos in st.session_state.lineup:
+                        current_name = st.session_state.lineup[pos].get("name", "")
+                    
+                    current_val_idx = 0
+                    if current_name:
                         for i, lbl in enumerate(option_labels):
-                            if lbl.startswith(current_val):
+                            if lbl.startswith(current_name):
                                 current_val_idx = i
                                 break
-                        else:
-                            current_val_idx = 0
                     
                     key = f"manual_{pos}"
                     manual_selections[pos] = st.selectbox(
@@ -323,13 +315,11 @@ with tab_lineup:
             col_man_save, col_man_clear = st.columns([1, 1])
             with col_man_save:
                 if st.button("✅ 수동 라인업 적용", type="primary", use_container_width=True):
-                    # 옵션 라벨에서 실제 이름만 추출
                     clean_selections = {}
                     for pos, label in manual_selections.items():
                         if label == "--- 공석 ---":
                             clean_selections[pos] = "--- 공석 ---"
                         else:
-                            # "이름 (1지망)" 형식에서 괄호 앞만 추출
                             name = label.split(" (")[0]
                             clean_selections[pos] = name
                     
@@ -393,7 +383,7 @@ with tab_lineup:
 
         col_field, col_summary = st.columns([3, 2])
 
-        # ─── 야구장 그라운드 (잔디 초록 + 마운드) ───
+        # ─── 야구장 그라운드 (잔디 초록 + 마운드, 1루/3루 라인 기준) ───
         with col_field:
             st.write("⚾ 야구장 수비 위치 배치도")
 
@@ -402,7 +392,8 @@ with tab_lineup:
                 "2루수": (63, 41), "3루수": (24, 56),
                 "유격수": (37, 41),
                 "좌익수": (18, 20), "중견수": (50, 12), "우익수": (82, 20),
-                "투수": (50, 52)
+                # 1루수(56)랑 3루수(56) Y좌표랑 같게 맞춤
+                "투수": (50, 56)
             }
 
             pins_html = ""
@@ -453,7 +444,7 @@ with tab_lineup:
                         border:1px solid #8b5a2b;border-radius:4px;opacity:0.85;">
                     </div>
                 </div>
-                <div style="position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);
+                <div style="position:absolute;left:50%;top:56%;transform:translate(-50%,-50%);
                     width:8%;aspect-ratio:1/1;background:#a9714d;border-radius:50%;
                     border:1px solid #8b5a2b;box-shadow:0 2px 6px rgba(0,0,0,0.3);pointer-events:none;">
                 </div>
@@ -486,7 +477,6 @@ with tab_lineup:
                     })
             st.dataframe(pd.DataFrame(lineup_rows), use_container_width=True, hide_index=True)
 
-            # ─── 대기 후보: 한 줄 한 명 ───
             st.write(f"🪑 대기 후보 (벤치 {len(st.session_state.bench)}명)")
             if st.session_state.bench:
                 for m in st.session_state.bench:
