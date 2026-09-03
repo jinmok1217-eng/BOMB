@@ -13,7 +13,6 @@ st.set_page_config(
 
 DATA_FILE = "baseball_members.json"
 
-# 공식 8개 수비 포지션 + 투수
 POSITIONS = ["포수", "1루수", "2루수", "3루수", "유격수", "좌익수", "중견수", "우익수", "투수"]
 POS_CODE = {
     "포수": "C", "1루수": "1B", "2루수": "2B", "3루수": "3B",
@@ -74,14 +73,30 @@ if "bench" not in st.session_state:
 if "reasons" not in st.session_state:
     st.session_state.reasons = []
 
-# 최적 라인업 산출 알고리즘 (자동 배정은 8개 수비 포지션만 대상)
+# 수동 라인업 생성
+def build_manual_lineup(selections):
+    lineup = {}
+    selected_names = set()
+    for pos, name in selections.items():
+        if name and name != "" and name != "---":
+            lineup[pos] = {"name": name, "pos1": "", "pos2": ""}
+            selected_names.add(name)
+    # 수동 선택 선수의 pos1/pos2 정보 붙이기
+    for pos, player in lineup.items():
+        for m in st.session_state.members:
+            if m["name"] == player["name"]:
+                player["pos1"] = m["pos1"]
+                player["pos2"] = m["pos2"]
+                break
+    return lineup, selected_names
+
+# 자동 라인업 산출 알고리즘 (투수 제외 8개 수비 포지션)
 def compute_lineup(attendees):
     if not attendees:
         return {}, [], []
 
     assigned = {}
     used_names = set()
-    # 자동 배정 대상: 투수 제외 8개 포지션
     auto_positions = [p for p in POSITIONS if p != "투수"]
 
     def get_score(member, pos):
@@ -193,6 +208,14 @@ st.markdown("""
     border-color: #3b82f6 !important;
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25) !important;
 }
+/* 수동 라인업 빌더 드롭다운 스타일 */
+.stSelectbox [data-baseweb="select"] .css-1u27aoq {
+    background-color: #1e3a5f !important;
+    border-radius: 0 6px 6px 0 !important;
+}
+.stSelectbox [data-baseweb="select"] .css-1u27aoq:hover {
+    background-color: #3b82f6 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -206,20 +229,116 @@ with tab_lineup:
         default=member_names
     )
 
-    col_btn1, col_btn2 = st.columns([2, 1])
-    with col_btn1:
-        if st.button("⚡ 최적 라인업 자동 생성", type="primary", use_container_width=True):
-            attendee_objs = [m for m in st.session_state.members if m["name"] in selected_attendees]
-            if len(attendee_objs) < 8:
-                st.warning(f"선택된 참석자가 {len(attendee_objs)}명입니다. 최소 8명 이상 필요합니다.")
-                st.stop()
-            
-            lineup, bench, reasons = compute_lineup(attendee_objs)
-            st.session_state.lineup = lineup
-            st.session_state.bench = bench
-            st.session_state.reasons = reasons
-            st.success("라인업 생성이 완료되었습니다!")
+    # ─── 라인업 생성 방식 선택 ───
+    st.divider()
+    st.subheader("라인업 생성 방식")
+    gen_method = st.radio(
+        "생성 방법 선택",
+        ["⚡ 자동 라인업 생성 (알고리즘)", "✏️ 수동으로 직접 라인업 구성"],
+        horizontal=True,
+        key="gen_method"
+    )
 
+    if gen_method == "⚡ 자동 라인업 생성 (알고리즘)":
+        col_btn1, col_btn2 = st.columns([2, 1])
+        with col_btn1:
+            if st.button("⚡ 최적 라인업 자동 생성", type="primary", use_container_width=True):
+                attendee_objs = [m for m in st.session_state.members if m["name"] in selected_attendees]
+                if len(attendee_objs) < 8:
+                    st.warning(f"선택된 참석자가 {len(attendee_objs)}명입니다. 최소 8명 이상 필요합니다.")
+                    st.stop()
+                
+                lineup, bench, reasons = compute_lineup(attendee_objs)
+                st.session_state.lineup = lineup
+                st.session_state.bench = bench
+                st.session_state.reasons = reasons
+                st.success("라인업 생성이 완료되었습니다!")
+                st.rerun()
+
+    else:  # 수동 라인업
+        st.caption("각 포지션별로 1지망, 2지망, 미지망 중에서 직접 선택해 라인업을 구성하세요.")
+        st.divider()
+
+        att_objs = [m for m in st.session_state.members if m["name"] in selected_attendees]
+        
+        with st.expander("🔧 수동 라인업 구성 패널", expanded=True):
+            st.write("참석자 목록에서 각 포지션의 선수를 선택하세요. 공석을 원하면 '--- 공석 ---'을 선택하세요.")
+            
+            # 포지션별 선택 드롭다운 (1지망/2지망/미지망 옵션)
+            manual_selections = {}
+            manual_cols = st.columns(3)
+            for idx, pos in enumerate(POSITIONS):
+                col = manual_cols[idx % 3]
+                with col:
+                    # 옵션 구성: 미지망 + 1지망 선수 + 2지망 선수 + 공석
+                    p1_names = [m["name"] for m in att_objs if m["pos1"] == pos]
+                    p2_names = [m["name"] for m in att_objs if m["pos2"] == pos]
+                    
+                    options = ["--- 공석 ---"]
+                    seen = set()
+                    for n in p1_names + p2_names:
+                        if n not in seen:
+                            options.append(n)
+                            seen.add(n)
+                    options.sort()
+                    
+                    current_val = st.session_state.lineup.get(pos, {}).get("name", "") if st.session_state.lineup else ""
+                    if current_val == "":
+                        current_val = "--- 공석 ---"
+                    
+                    key = f"manual_{pos}"
+                    manual_selections[pos] = st.selectbox(
+                        f"{pos} ({POS_CODE[pos]})",
+                        options=options,
+                        index=options.index(current_val) if current_val in options else 0,
+                        key=key
+                    )
+            
+            col_man_save, col_man_clear = st.columns([1, 1])
+            with col_man_save:
+                if st.button("✅ 수동 라인업 적용", type="primary", use_container_width=True):
+                    lineup, selected_names = build_manual_lineup(manual_selections)
+                    st.session_state.lineup = lineup
+                    
+                    # 벤치 계산: 참석자 중 선발에 안 뽑힌 사람
+                    all_selected = set(m["name"] for m in att_objs)
+                    bench = [m for m in att_objs if m["name"] not in selected_names]
+                    st.session_state.bench = bench
+                    
+                    # reasons 초기화 (수동이라 사유 없음)
+                    st.session_state.reasons = []
+                    for pos in POSITIONS:
+                        assigned = lineup.get(pos)
+                        if assigned:
+                            p1_list = [m["name"] for m in att_objs if m["pos1"] == pos]
+                            p2_list = [m["name"] for m in att_objs if m["pos2"] == pos]
+                            st.session_state.reasons.append({
+                                "pos": pos,
+                                "assigned": assigned,
+                                "p1_list": p1_list,
+                                "p2_list": p2_list,
+                            })
+                        else:
+                            p1_list = [m["name"] for m in att_objs if m["pos1"] == pos]
+                            p2_list = [m["name"] for m in att_objs if m["pos2"] == pos]
+                            st.session_state.reasons.append({
+                                "pos": pos,
+                                "assigned": None,
+                                "p1_list": p1_list,
+                                "p2_list": p2_list,
+                            })
+                    
+                    st.success("수동 라인업이 적용되었습니다!")
+                    st.rerun()
+            
+            with col_man_clear:
+                if st.button("🔄 수동 선택 초기화", use_container_width=True):
+                    for pos in POSITIONS:
+                        st.session_state[lineup_key] = st.session_state.get(f"manual_{pos}")
+                    st.warning("수동 선택 값이 초기화되었습니다. 다시 선택해주세요.")
+                    st.rerun()
+
+    # ─── 라인업 표시 (공통) ───
     if st.session_state.lineup:
 
         with st.expander("🔄 수동 위치 맞교환 (스왑)"):
@@ -250,7 +369,7 @@ with tab_lineup:
                 "2루수": (63, 41), "3루수": (24, 56),
                 "유격수": (37, 41),
                 "좌익수": (18, 20), "중견수": (50, 12), "우익수": (82, 20),
-                "투수": (50, 52)   # 마운드 위치 - 야구장 중앙 약간 위쪽
+                "투수": (50, 52)
             }
 
             pins_html = ""
@@ -258,23 +377,22 @@ with tab_lineup:
                 player = st.session_state.lineup.get(pos)
                 if player:
                     p_name = player["name"]
-                    p1 = player["pos1"]
-                    p2 = player["pos2"]
-                    # 투수 전용 스타일
+                    p1 = player.get("pos1", "")
+                    p2 = player.get("pos2", "")
                     if pos == "투수":
-                        bg = "#1e293b"        # 남색
+                        bg = "#1e293b"
                         border = "#64748b"
                         label_color = "#94a3b8"
                     elif p1 == pos:
-                        bg = "#1e3a5f"        # 남색 - 1지망
+                        bg = "#1e3a5f"
                         border = "#3b82f6"
                         label_color = "#93c5fd"
                     elif p2 == pos:
-                        bg = "#172554"        # 진한 남색 - 2지망
+                        bg = "#172554"
                         border = "#6366f1"
                         label_color = "#a5b4fc"
                     else:
-                        bg = "#0f172a"        # 남색 배경 - 조정 배정
+                        bg = "#0f172a"
                         border = "#818cf8"
                         label_color = "#c4b5fd"
                 else:
@@ -294,17 +412,14 @@ with tab_lineup:
 
             field_html = f"""
             <div style="position:relative;width:100%;aspect-ratio:4/3;background:#0f6b3a;border-radius:16px;border:2px solid #0a4d2a;overflow:hidden;box-shadow:inset 0 2px 10px rgba(0,0,0,0.35);">
-                <!-- 잔디 질감 그라데이션 -->
                 <div style="position:absolute;inset:0;opacity:0.25;pointer-events:none;
                     background:radial-gradient(ellipse at 50% 50%, #128040 0%, #0f6b3a 60%, #0a4d2a 100%);">
                 </div>
-                <!-- 베이스 라인 (다이아몬드 흙색 구역) -->
                 <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
                     <div style="width:45%;aspect-ratio:1/1;background:#a9714d;transform:rotate(45deg);margin-top:55px;
                         border:1px solid #8b5a2b;border-radius:4px;opacity:0.85;">
                     </div>
                 </div>
-                <!-- 마운드 흙색 원 -->
                 <div style="position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);
                     width:8%;aspect-ratio:1/1;background:#a9714d;border-radius:50%;
                     border:1px solid #8b5a2b;box-shadow:0 2px 6px rgba(0,0,0,0.3);pointer-events:none;">
@@ -365,7 +480,6 @@ with tab_lineup:
                     p1_names = ", ".join(r_item["p1_list"]) if r_item["p1_list"] else "없음"
                     p2_names = ", ".join(r_item["p2_list"]) if r_item["p2_list"] else "없음"
                 else:
-                    # 투수는 자동 배정 대상이 아니니까 지원 명단 직접 계산
                     p1_list = [m["name"] for m in st.session_state.members if m["pos1"] == pos]
                     p2_list = [m["name"] for m in st.session_state.members if m["pos2"] == pos]
                     p1_names = ", ".join(p1_list) if p1_list else "없음"
@@ -420,7 +534,7 @@ with tab_members:
 
 with tab_stats:
     st.subheader("포지션별 지원자 분포 현황")
-    st.caption("9개 포지션별 1순위 및 2순위 지망 인명 분포입니다.")
+    st.caption("포지션별 1순위 및 2순위 지망 인명 분포입니다.")
 
     stat_cols = st.columns(3)
     for idx, pos in enumerate(POSITIONS):
