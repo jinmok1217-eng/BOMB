@@ -112,19 +112,11 @@ def compute_lineup(attendees):
         assigned[pos] = chosen
         used_names.add(chosen["name"])
 
-        if chosen["pos1"] == pos:
-            r_type = "1지망 우선"
-        elif chosen["pos2"] == pos:
-            r_type = "2지망 배정"
-        else:
-            r_type = "조정 배정"
-
         reasons.append({
             "pos": pos,
             "assigned": chosen,
             "p1_list": item["p1"],
             "p2_list": item["p2"],
-            "reason": r_type
         })
 
     improved = True
@@ -151,6 +143,7 @@ def compute_lineup(attendees):
     bench = [m for m in attendees if m["name"] not in used_names]
     return assigned, bench, reasons
 
+
 # UI 시작
 st.title("⚾ 야구부 라인업 빌더")
 st.caption("희망 포지션 기반 자동 배정, 상세 사유 분석 및 즉시 명단 편집기")
@@ -166,15 +159,10 @@ with tab_lineup:
     st.subheader("오늘 경기 참석자 선택")
     member_names = [m["name"] for m in st.session_state.members]
     
-    col_att_ctrl1, col_att_ctrl2 = st.columns([1, 4])
-    with col_att_ctrl1:
-        select_all = st.checkbox("전체 선수 참석", value=True)
-    
-    default_selected = member_names if select_all else []
     selected_attendees = st.multiselect(
         "참석자 선택",
         options=member_names,
-        default=default_selected
+        default=member_names
     )
 
     col_btn1, col_btn2 = st.columns([2, 1])
@@ -231,36 +219,32 @@ with tab_lineup:
                     p1 = player["pos1"]
                     p2 = player["pos2"]
                     if p1 == pos:
-                        badge = ""
-                        bg = "#064e3b"
-                        border = "#10b981"
+                        bg = "#0f3b5e"
+                        border = "#3b82f6"
                     elif p2 == pos:
-                        badge = ""
-                        bg = "#0c4a6e"
-                        border = "#0ea5e9"
+                        bg = "#1e3a5f"
+                        border = "#60a5fa"
                     else:
-                        badge = ""
-                        bg = "#451a03"
-                        border = "#f59e0b"
+                        bg = "#1e1b4b"
+                        border = "#a78bfa"
                 else:
                     p_name = "공석"
-                    badge = ""
                     bg = "#1e293b"
                     border = "#475569"
 
                 pins_html += f"""
                 <div style="position:absolute;left:{x}%;top:{y}%;transform:translate(-50%,-50%);z-index:10;" class="pin_box" data-pos="{pos}">
                     <div style="background:{bg};border:1.5px solid {border};border-radius:8px;padding:2px 6px;text-align:center;color:white;font-size:9px;box-shadow:0 2px 4px -1px rgba(0,0,0,0.4);min-width:50px;line-height:1.3;cursor:pointer;">
-                        <div style="font-weight:bold;color:#fcd34d;font-size:8px;">{pos}</div>
+                        <div style="font-weight:bold;color:#93c5fd;font-size:8px;">{pos}</div>
                         <div style="font-weight:800;font-size:10px;margin-top:1px;">{p_name}</div>
                     </div>
                 </div>
                 """
 
             field_html = f"""
-            <div style="position:relative;width:100%;aspect-ratio:4/3;background:#022c22;border-radius:16px;border:2px solid #065f46;overflow:hidden;box-shadow:inset 0 2px 8px rgba(0,0,0,0.8);">
+            <div style="position:relative;width:100%;aspect-ratio:4/3;background:#0f172a;border-radius:16px;border:2px solid #1e3a5f;overflow:hidden;box-shadow:inset 0 2px 8px rgba(0,0,0,0.8);">
                 <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0.25;pointer-events:none;">
-                    <div style="width:45%;aspect-ratio:1/1;border:2px solid #fef08a;transform:rotate(45deg);margin-top:55px;"></div>
+                    <div style="width:45%;aspect-ratio:1/1;border:2px solid #bfdbfe;transform:rotate(45deg);margin-top:55px;"></div>
                 </div>
                 {pins_html}
                 <script>
@@ -281,30 +265,31 @@ with tab_lineup:
             for pos in POSITIONS:
                 player = st.session_state.lineup.get(pos)
                 if player:
-                    match_type = "1지망 매칭" if player["pos1"] == pos else ("2지망 매칭" if player["pos2"] == pos else "조정 배정")
                     lineup_rows.append({
                         "포지션": pos,
                         "선수 이름": player["name"],
-                        "상태": match_type,
-                        "1지망": player["pos1"],
-                        "2지망": player["pos2"]
                     })
                 else:
                     lineup_rows.append({
-                        "포지션": pos, "선수 이름": "공석", "상태": "-", "1지망": "-", "2지망": "-"
+                        "포지션": pos, "선수 이름": "공석"
                     })
             st.dataframe(pd.DataFrame(lineup_rows), use_container_width=True, hide_index=True)
 
             st.write(f"🪑 대기 후보 (벤치 {len(st.session_state.bench)}명)")
             if st.session_state.bench:
-                bench_str = ", ".join([f"{m['name']}({m['pos1']}/{m['pos2']})" for m in st.session_state.bench])
+                # 각 선수별 박스 GUI 대신 줄바꿈 + 1지망만 표시
+                bench_items = []
+                for m in st.session_state.bench:
+                    p1 = m["pos1"]
+                    bench_items.append(f"• {m['name']}  (1지망: {p1})")
+                bench_str = "\n".join(bench_items)
                 st.info(bench_str)
             else:
                 st.write("참석자 전원이 선발로 배정되었습니다.")
 
         st.divider()
-        st.subheader("💡 포지션별 배정 사유 및 지원자 현황 분석")
-        st.caption("선수들의 1·2순위 지망 선호도와 경쟁률을 고려하여 알고리즘이 판단한 근거입니다.")
+        st.subheader("포지션별 지원자")
+        st.caption("포지션별로 누가 지원했는지(1지망/2지망)와 실제 배정 결과만 표시합니다.")
 
         reason_cols = st.columns(3)
         for idx, pos in enumerate(POSITIONS):
@@ -316,11 +301,11 @@ with tab_lineup:
                 r_item = next((r for r in st.session_state.reasons if r["pos"] == pos), None)
                 p1_names = ", ".join(r_item["p1_list"]) if r_item and r_item["p1_list"] else "없음"
                 p2_names = ", ".join(r_item["p2_list"]) if r_item and r_item["p2_list"] else "없음"
-                reason_text = r_item["reason"] if r_item else "수동 변경"
 
                 with st.container(border=True):
                     st.markdown(f"**{pos}** → **{assigned_name}**")
-                    st.caption(f"{reason_text} | 1지망: {p1_names} | 2지망: {p2_names}")
+                    st.caption(f"1지망: {p1_names}")
+                    st.caption(f"2지망: {p2_names}")
 
 with tab_members:
     st.subheader("선수 명단 즉시 수정 (Data Editor)")
@@ -427,4 +412,3 @@ with tab_backup:
                 st.rerun()
         except Exception as e:
             st.error(f"파일을 읽는 도중 오류가 발생했습니다: {e}")
-
